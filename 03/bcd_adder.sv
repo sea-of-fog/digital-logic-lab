@@ -44,16 +44,17 @@ module bcd_inverter(
   output [3:0] o,
   input  [3:0] d, input s
 );
-  	logic is8 = d[3] && !d[2] && !d[1] && !d[0];
-  	logic is9 = d[3] && !d[2] && !d[1] &&  d[0];
-  	logic smol = !(is8 || is9);
-  	logic [3:0] sinv, inv;
-    nibble_adder na(sinv, dummy_c, ~d & 4'b0111, 4'b0010, 0);
-  	assign inv = {4{is8}}           & 4'b0001
-               | {4{is9}}           & 4'b0000
-               | {4{smol}}  		& sinv;
-    assign o = {4{s}}  & inv
-             | {4{!s}} & d;
+  	logic is8or9 = d[3];
+    // if the digit is less than 8, then the negation of its first three bits
+    // is 7 - d, so we just add 2 to the negation!
+    // It's easy to check that the formulas below work
+    logic [3:0] small_inv;
+    assign small_inv[0] = ~d[0];
+    assign small_inv[1] = d[1];
+    assign small_inv[2] = d[2] ^ d[1];
+    assign small_inv[3] = ~d[2] && d[3];
+    assign o =   {4{is8or9}} && ~d[0]
+             || ~{4{is8or9}} && small_inv;;
 endmodule
 
 module bcd_two_digit_adder(

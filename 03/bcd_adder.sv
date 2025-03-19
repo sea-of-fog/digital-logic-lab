@@ -42,14 +42,15 @@ endmodule
 
 module bcd_inveter(
     output [3:0] o, 
-    input  [3:0] d
+    input  [3:0] d, input sub
 );
-    assign o[0] = !d[0];
-    assign o[1] = d[1];
-    assign o[2] = d[2] ^ d[1];
-    assign o[3] = !(d[3] || d[2] || d[1]);
+    logic [3:0] inv;
+    assign inv[0] = !d[0];
+    assign inv[1] = d[1];
+    assign inv[2] = d[2] ^ d[1];
+    assign inv[3] = !(d[3] || d[2] || d[1]);
+    assign o = sub ? inv : d;
 endmodule
-
 
 module bcd_two_digit_adder(
     output [7:0] o,

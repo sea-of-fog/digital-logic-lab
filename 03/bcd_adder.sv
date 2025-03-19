@@ -40,26 +40,14 @@ module bcd_full_adder(
              | bit_sum & ~{4{c}};
 endmodule
 
-module bcd_inverter(
-  output [3:0] o,
-  input  [3:0] d
+module bcd_inveter(
+    output [3:0] o, 
+    input  [3:0] d
 );
-    logic [3:0] is8or9 = {4{d[3]}};
-    // if the digit is less than 8, then the negation of its first three bits
-    // is 7 - d, so we just add 2 to the negation!
-    // It's easy to check that the formulas below work
-    logic [3:0] large_inv;
-    assign large_inv[0] = ~d[0];
-  	assign large_inv[3:1] = 3'b0;
-  
-    logic [3:0] small_inv;
-    assign small_inv[0] = ~d[0];
-    assign small_inv[1] = d[1];
-    assign small_inv[2] = d[2] ^ d[1];
-    assign small_inv[3] = ~d[2] && ~d[1];
-
-    assign o =  is8or9 & large_inv
-             | ~is8or9 & small_inv;;
+    assign o[0] = !d[0];
+    assign o[1] = d[1];
+    assign o[2] = d[2] ^ d[1];
+    assign o[3] = !(d[3] || d[2] || d[1]);
 endmodule
 
 

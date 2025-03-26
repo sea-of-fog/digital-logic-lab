@@ -6,11 +6,10 @@ module OneBitShifter(
     logic [3:0] L = {4{l}};
     logic [3:0] R = {4{r}};
     // extend i both ways
-    logic [4:-1] I;
-    assign I[3:0] = i[3:0];
-    assign I[4]   = 0;
-    assign I[-1]  = 0;
+    logic [4:-1] I = {1'b0, i, 1'b0};
     assign o = ~L & ~R & I[3:0]
              |  L & I[2:-1]
              |  R & I[4:1];
 endmodule
+/* the critical path has length three. it is any of the paths from l/r to any
+ * output, which goes through a negation (i.e. ~L and ~R in the DNF). */

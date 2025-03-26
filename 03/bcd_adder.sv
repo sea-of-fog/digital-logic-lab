@@ -73,6 +73,6 @@ module BCDTwoDigitAdder(
     BCDInverter bi0(binv[3:0], b[3:0], sub);
     BCDInverter bi1(binv[7:4], b[7:4], sub);
     BCDFullAdder ba0(o[3:0], c, a[3:0], binv[3:0], sub);
-    BCDFullAdder ba1(o[7:4], dummy_c, a[7:4], binv[7:4], c);
+    BCDFullAdder ba1(o[7:4], , a[7:4], binv[7:4], c);
 endmodule
 

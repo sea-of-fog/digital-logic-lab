@@ -5,7 +5,7 @@ module FunnelShifter(
     // the widths of the shift_k vector are calculated in reverse: if we need
     // 8 bits on the output (so, on shift 4), then we need 8 + 4 on the input
     // to "shifting by 4" etc.
-    logic [15:0] ab = {a,b};
+    logic [14:0] ab = 15'({a,b});
     logic [13:0] shift1 = n[0] ? ab[14:1] : ab[13:0];
     logic [11:0] shift2 = n[1] ? shift1[13:2] : shift1[11:0];
     logic [7 :0] shift4 = n[2] ? shift2[11:4] : shift2[7:0];

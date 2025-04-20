@@ -31,7 +31,8 @@ module Counter#(parameter N = 4)(
     output [N-1:0] out,
     input  nrst, step, down, clk
 );
-  	logic [N-1:0] is_zero, all_ones, all_zeros;
+    logic [N-1:0] is_zero; // is_zero[N-1] purposefully ignored so as to not complicate the loop
+    logic [N-2:0] all_ones, all_zeros;
   	logic [N-1:1] flip;
     TFlipFlop b0(out[0], is_zero[0], clk, ~step, 1'b1, nrst); 
     genvar i;
@@ -41,7 +42,7 @@ module Counter#(parameter N = 4)(
         assign flip[i] = step ? (down ? all_zeros[i-1]               : all_ones[i-1])
                               : (down ? all_zeros[i-1] && is_zero[0] : all_ones[i-1] && out[0]);
         TFlipFlop tff(out[i], is_zero[i], clk, flip[i], 1'b1, nrst);
-        assign all_zeros[i] = all_zeros[i-1] && is_zero[i];
-        assign all_ones[i]  = all_ones[i-1]  && out[i];
+        if (i < N - 1) assign all_zeros[i] = all_zeros[i-1] && is_zero[i];
+        if (i < N - 1) assign all_ones[i]  = all_ones[i-1]  && out[i];
     end
 endmodule

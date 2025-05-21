@@ -1,3 +1,4 @@
+// Parameter: number width
 module datapath#(N = 8)(
   	output [N-1:0] out, output eq, gt,
   	input  [N-1:0] ina, inb, input load, swap, sub, clk
@@ -44,13 +45,14 @@ module ctlpath(
   
 endmodule
 
+// Parameter: number width
 module GCD#(N = 8)(
     output [N-1:0] out, output ready, 
     input  [N-1:0] ina, inb, input start, clk, nrst
 );
-    
+    // steering signals for the datapath tell us whether to load, swap or
+    // subtract those numbers. the status signals are comparison results
     logic load, swap, sub, eq, gt;
   	datapath#(N) dp(out, eq, gt, ina, inb, load, swap, sub, clk);
   	ctlpath ctl(ready, load, swap, sub, start, clk, nrst, eq, gt);
-    
 endmodule

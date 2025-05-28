@@ -2,7 +2,7 @@ module RAM(
     output logic [7:0] dataout, 
     input [7:0] datain, input [2:0] read_addr, write_addr, input wr, clk
 );
-    logic [7:0] mem [2:0];
+    logic [7:0] mem [7:0];
     always_ff @ (posedge clk) begin
         if (wr) mem[write_addr] <= datain;
     end
@@ -28,7 +28,7 @@ module Ctlpath(
         else unique case (st)
             READY: if (start) st <= OUTER;
             OUTER: if (i_full) st <= READY; else st <= INNER;
-            INNER: if (i_full) st <= END;
+            INNER: if (j_full) st <= END;
             END:   if (i_eq_jm) st <= OUTER; else st <= SWAP;
             SWAP:   st <= OUTER;
         endcase
@@ -43,13 +43,13 @@ module Ctlpath(
     assign m_overwrite =  (st == OUTER) && !i_full
                        || (st == INNER) && c_lt_m;
     assign j_set = (st == OUTER) && !i_full;
-    assign j_inc = (st == INNER) && !c_lt_m && !j_full;
-    assign jm_set_i = (st == INNER) && !i_full;
+    assign j_inc = (st == INNER) && !j_full;
+    assign jm_set_i = (st == OUTER) && !i_full;
     assign jm_set_j = (st == INNER) && c_lt_m;
     assign c_set_d0 = (st == READY) && start;
-    assign c_set_di = (st == INNER) && !c_lt_m && j_full;
+    assign c_set_di = (st == INNER) && j_full;
     assign c_set_di1 = (st == END) && i_eq_jm || (st == SWAP) || (st == OUTER) && !i_full;
-    assign c_set_dj1 = (st == INNER) && !c_lt_m && !j_full;
+    assign c_set_dj1 = (st == INNER) && !j_full;
     assign write_addr_sel = (st == SWAP);
 endmodule
 
@@ -119,12 +119,13 @@ module Arbiter(
     output wr, output [7:0] datain, output [2:0] read_addr, write_addr, 
     input  [7:0] out_datatin, in_datain,
     input [2:0] out_addr, in_read_addr, in_write_addr, 
-    input out_wr, in_wr, ready
+    input out_wr, in_wr, ready, start
 );
-    assign wr = ready ? out_wr : in_wr;
-    assign datain = ready ? out_datatin : in_datain;
-    assign read_addr = ready ? out_addr : in_read_addr;
-    assign write_addr = ready ? out_addr : in_write_addr;
+    logic choice = ready && !start;
+    assign wr = choice ? out_wr : in_wr;
+    assign datain = choice ? out_datatin : in_datain;
+    assign read_addr = choice ? out_addr : in_read_addr;
+    assign write_addr = choice ? out_addr : in_write_addr;
 endmodule
 
 module SelectionSort(
@@ -161,6 +162,6 @@ module SelectionSort(
     clk);
     Arbiter arb(
         arbitrated_wr, arbitrated_datain, arbitrated_read_addr, arbitrated_write_addr,
-        datain, internal_datain, addr, internal_read_addr, internal_write_addr, wr, internal_wr, ready);
+        datain, internal_datain, addr, internal_read_addr, internal_write_addr, wr, internal_wr, ready, start);
     RAM memory(dataout, arbitrated_datain, arbitrated_read_addr, arbitrated_write_addr, arbitrated_wr, clk);
 endmodule

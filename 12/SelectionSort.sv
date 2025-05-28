@@ -1,3 +1,4 @@
+// Memory module with synchronous read/write
 module RAM(
     output logic [7:0] dataout, 
     input [7:0] datain, input [2:0] read_addr, write_addr, input wr, clk
@@ -19,7 +20,7 @@ module Ctlpath(
     input  i_full, j_full, c_lt_m, i_eq_jm,
     start, nrst, clk
 );
-    // automaton state encoding and transitions
+    // FSM state encoding and transitions
     const logic [2:0] READY = 3'b100, OUTER = 3'b001,
         INNER = 3'b010, END = 3'b011, SWAP = 3'b000;
     logic [2:0] st;
@@ -61,13 +62,17 @@ module Datapath(
     output [7:0] datain,
     input  [7:0] dataout,
     // Steering signals
-    input i_set_zero, i_inc, j_set, j_inc, jm_set_i, jm_set_j, m_overwrite, c_set_d0, c_set_di, c_set_di1, c_set_dj1, write_addr_sel,
+    input i_set_zero, i_inc, j_set, j_inc, jm_set_i, jm_set_j, m_overwrite,
+          c_set_d0, c_set_di, c_set_di1, c_set_dj1, write_addr_sel,
     clk
 );
 
     logic [7:0] m, c;
     logic [2:0] i, j, jm, old_read_addr;
 
+    // Because the memory has synchronous read, it is impossible to implement
+    // c as a register, because there would need to be one cycle of delay
+    // between setting the read address and setting the value of c
     assign c = dataout;
 
     always_ff @ (posedge clk) begin
@@ -90,6 +95,13 @@ module Datapath(
     end
 
     // Memory interface
+    //
+    // Because c is literally the current state of the memory output, the
+    // "next" value of read address has to be made available before the next
+    // clock edge, hence the combinatorial formula for read_addr.
+    //
+    // However, the address is still stored, because it needs to be kept
+    // persistent across states where all the sttering signals c_set_X are low
     always_ff @ (posedge clk) begin
         if (c_set_d0) old_read_addr <= 0;
         else if (c_set_di) old_read_addr <= i;
@@ -133,10 +145,19 @@ module SelectionSort(
     input  [7:0] datain, input [2:0] addr, input wr, nrst, start, clk
 );
     // Steering signals
+    // Most should be self-explanatory. write_addr_sel is used for selecting
+    // under which address and with what value we perform the memory write
     logic i_set_zero, i_inc, j_set, j_inc, jm_set_i, jm_set_j, m_overwrite, c_set_d0, c_set_di, c_set_di1, c_set_dj1, write_addr_sel;
-    // Status signals
+    // Status signals -- should be self-explanatory
     logic i_full, j_full, c_lt_m, i_eq_jm;
+
     // Memory interface
+    //
+    // The memory interface is shared between the circuit internals and
+    // external interface -- depending on the control state, the Arbiter
+    // module chooses (muxes) who has control. The signals prefixed with
+    // "internal" are those driven by the controlpath/datapath, while the 
+    // outputs of the Arbiter begin with "arbitrated".
     logic arbitrated_wr, internal_wr;
     logic [2:0] arbitrated_read_addr, arbitrated_write_addr,
                 internal_read_addr, internal_write_addr;
@@ -149,19 +170,20 @@ module SelectionSort(
         // Status signals
         i_full, j_full, c_lt_m, i_eq_jm,
         start, nrst, clk);
+
     Datapath dp(
         // Status signals
         i_full, j_full, c_lt_m, i_eq_jm,
         //  Memory interface
-        internal_read_addr, internal_write_addr,
-        internal_datain,
-        dataout,
+        internal_read_addr, internal_write_addr, internal_datain, dataout,
         // Steering signals
         i_set_zero, i_inc, j_set, j_inc, jm_set_i, jm_set_j, m_overwrite, 
         c_set_d0, c_set_di, c_set_di1, c_set_dj1, write_addr_sel,
     clk);
+
     Arbiter arb(
         arbitrated_wr, arbitrated_datain, arbitrated_read_addr, arbitrated_write_addr,
         datain, internal_datain, addr, internal_read_addr, internal_write_addr, wr, internal_wr, ready, start);
+
     RAM memory(dataout, arbitrated_datain, arbitrated_read_addr, arbitrated_write_addr, arbitrated_wr, clk);
 endmodule

@@ -20,7 +20,7 @@ endmodule
 // Note that the stack is empty only until the first push, so out <= -out does
 // not change the initial value of out, which is 0 (no if is needed)
 module RPNCalculator#(parameter N = 16, M = 10)(
-    output logic [N-1:0] out, output logic [M-1:0] cnt,
+    output logic signed [N-1:0] out, output logic [M-1:0] cnt,
     input  en, nrst, clk, push, input [2:0] op, input [N-1:0] d
 );
     // constants for opcodes
@@ -63,13 +63,15 @@ module RPNCalculator#(parameter N = 16, M = 10)(
             endcase
         end
     end
+  
+  	logic signed [N-1:0] signed_zero = {N{1'b0}};
 
     always_ff @(posedge clk or negedge nrst) begin
         if (!nrst) out <= 0;
         else if (en) begin
             if (push) out <= d;
             else unique case (op)
-                GREATER: out <= (out > 0);
+              	GREATER: out <= (out > signed_zero);
                 NEG:  out <= -out;
                 ADD:  if (cnt >= 2) out <= out + bot;
                 MUL:  if (cnt >= 2) out <= out * bot;

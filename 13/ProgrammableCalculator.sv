@@ -44,9 +44,9 @@ module RPNCalculator#(parameter N = 16, M = 10)(
     //
     // similarly, we only write when pushing to the stack, and in that case
     // the write address is cnt
-    logic wr = push && !full || (op == SWAP);
+    logic wr = push && !full & (cnt > 0) || (op == SWAP);
     logic [M-1:0] mem_raddr = (op == LOAD) ? cnt - 1 - out[M-1:0] : cnt - 1;
-    logic [M-1:0] mem_waddr = (op == SWAP) ? cnt - 1 : cnt;
+    logic [M-1:0] mem_waddr = (op == SWAP) && !push ? cnt - 1 : cnt;
     AsyncRAM#(N, M) ar(bot, out, mem_raddr, mem_waddr, wr && en, clk);
 
     always_ff @(posedge clk or negedge nrst) begin

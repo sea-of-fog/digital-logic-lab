@@ -24,7 +24,7 @@ module RPNCalculator#(parameter N = 16, M = 10)(
     input  en, nrst, clk, push, input [2:0] op, input [N-1:0] d
 );
     // constants for opcodes
-    const logic [1:0] GREATER = 3'b000, NEG = 3'b001,
+    const logic [2:0] GREATER = 3'b000, NEG = 3'b001,
         ADD = 3'b010, MUL = 3'b011, SWAP = 3'b100,
         LOAD = 3'b101, POPA = 3'b110, POPB = 3'b111;
 
@@ -45,36 +45,40 @@ module RPNCalculator#(parameter N = 16, M = 10)(
     // similarly, we only write when pushing to the stack, and in that case
     // the write address is cnt
     logic wr = push && !full || (op == SWAP);
-    logic mem_raddr = (op == LOAD) ? cnt - 1 - out : cnt - 1;
-    logic mem_waddr = (op == SWAP) ? cnt - 1 : cnt;
-    AsyncRAM#(N, M) ar(bot, out, mem_raddr, mem_waddr, push && !full, step);
+    logic [M-1:0] mem_raddr = (op == LOAD) ? cnt - 1 - out[M-1:0] : cnt - 1;
+    logic [M-1:0] mem_waddr = (op == SWAP) ? cnt - 1 : cnt;
+    AsyncRAM#(N, M) ar(bot, out, mem_raddr, mem_waddr, wr && en, clk);
 
     always_ff @(posedge clk or negedge nrst) begin
         if (!nrst) cnt <= 0;
-        else if (push) begin
-            if (!full) cnt <= cnt + 1;
+        else if (en) begin
+            if (push) begin
+                if (!full) cnt <= cnt + 1;
+            end
+            else unique case (op)
+                ADD: cnt <= cnt - 1;
+                MUL: cnt <= cnt - 1;
+                POPA: cnt <= cnt - 1;
+                POPB: cnt <= cnt - 1;
+            endcase
         end
-        else unique case (op)
-            ADD: cnt <= cnt - 1;
-            MUL: cnt <= cnt - 1;
-            POPA: cnt <= cnt - 1;
-            POPB: cnt <= cnt - 1;
-        endcase
     end
 
     always_ff @(posedge clk or negedge nrst) begin
         if (!nrst) out <= 0;
-        else if (push) out <= d;
-        else unique case (op)
-            GREATER: out <= (out > 0);
-            NEG:  out <= -out;
-            ADD:  if (cnt >= 2) out <= out + bot;
-            MUL:  if (cnt >= 2) out <= out * bot;
-            SWAP: if (cnt >= 2) out <= bot;
-            LOAD: out <= bot;
-            POPA: out <= bot;
-            POPB: out <= bot;
-        endcase
+        else if (en) begin
+            if (push) out <= d;
+            else unique case (op)
+                GREATER: out <= (out > 0);
+                NEG:  out <= -out;
+                ADD:  if (cnt >= 2) out <= out + bot;
+                MUL:  if (cnt >= 2) out <= out * bot;
+                SWAP: if (cnt >= 2) out <= bot;
+                LOAD: out <= bot;
+                POPA: out <= bot;
+                POPB: out <= bot;
+            endcase
+        end
     end
 
 endmodule
@@ -84,35 +88,41 @@ module SteeringModule#(parameter N = 16, M = 10)(
     input  [N-1:0] datain, input [M-1:0] addr, input start, wr, nrst, clk
 );
 
-    logic pc [M-1:0];
-    logic insn [N-1:0];
+    logic [M-1:0] pc;
+    logic [N-1:0] insn;
 
-    AsyncRAM#(N, M) code(insn, in, pc, addr, ready && !start && wr, clk);
+    AsyncRAM#(N, M) code(insn, datain, pc, addr, ready && !start && wr, clk);
 
     logic st;
-    const logic READY = 1, BUST = 0;
+    const logic READY = 1, BUSY = 0;
+
+    logic pc_inc, pc_overwrite, finish;
+  	assign finish = insn[N-1] && insn[N-2];
+  	assign pc_overwrite = insn[N-1] && !insn[N-2] && &insn[2:0];
+  	assign pc_inc = !finish && !pc_overwrite;
 
     always_ff @ (posedge clk or negedge nrst) begin
         if (!nrst) st <= READY;
         else unique case (st)
             READY: if (start) st <= BUSY;
-            BUST:  if (insn[N-1] && insn[N-2]) st <= READY;
+            BUSY:  if (finish) st <= READY;
         endcase
     end
 
     always_ff @ (posedge clk or negedge nrst) begin
-        unique case (st)
+        if (!nrst) pc <= 0;
+        else unique case (st)
             READY: if (start) pc <= 0;
             BUSY:  if (pc_inc) pc <= pc + 1;
-                   else if (pc_overwrite) pc <= out;
-        endcase
+                   else if (pc_overwrite) pc <= out[M-1:0];
+      endcase
     end
 
-    logic en = !ready && (!insn[N-1] || !insn[N-2]);
+    logic en = !ready && !finish;
     logic push = !ready && !insn[N-1];
 
     // TODO: actually implement en
-    RPNCalculator#(N, M) calc(out, , en, nrst, step, push, insn[2:0], insn);
-    assign ready = (st == READY)
+    RPNCalculator#(N, M) calc(out, , en, nrst, clk, push, insn[2:0], insn);
+    assign ready = (st == READY);
 
 endmodule

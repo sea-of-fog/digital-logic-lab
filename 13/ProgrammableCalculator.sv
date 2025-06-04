@@ -26,7 +26,7 @@ module RPNCalculator#(parameter N = 16, M = 10)(
     // constants for opcodes
     const logic [2:0] GREATER = 3'b000, NEG = 3'b001,
         ADD = 3'b010, MUL = 3'b011, SWAP = 3'b100,
-        LOAD = 3'b101, POPA = 3'b110, POPB = 3'b111;
+        LOAD = 3'b101, POP = 3'b110, JUMP = 3'b111;
 
     logic [N-1:0] bot; // second element from the top of the stack (first in memory)
     logic full = &cnt; // high iff the stack is full
@@ -34,19 +34,18 @@ module RPNCalculator#(parameter N = 16, M = 10)(
     // cnt is the amount of stack elements, so there are (cnt - 1)
     // elements of the stack in memory (because we don't keep the top element in memory)
     //
-    // we use the memory from index 1 -- mem[0] will be written to during the
-    // first push and never read from, but this tiny wastefullness simplifies
-    // the addressing logic (and we don't have to check for empty stack when
-    // pushing)
+  	// we use the memory from index 1 -- mem[0] will never be written to
+    // and never read from, but this tiny wastefullness simplifies
+    // the addressing logic
     //
-    // we only read when we need the second operand of a binary operation, 
-    // so the read address is always cnt - 1
+    // we only read when either need the second operand of a binary operation, 
+  	// or we are loading, thus the two options for read address
     //
-    // similarly, we only write when pushing to the stack, and in that case
-    // the write address is cnt
+  	// similarly, we only write when pushing to the stack or swapping, and the addresses are
+  	// cnt and cnt - 1 in these two cases (and irrelevant otherwise)
     logic wr = push && !full & (cnt > 0) || (op == SWAP);
     logic [M-1:0] mem_raddr = (op == LOAD) ? cnt - 1 - out[M-1:0] : cnt - 1;
-    logic [M-1:0] mem_waddr = (op == SWAP) && !push ? cnt - 1 : cnt;
+  	logic [M-1:0] mem_waddr = (op == SWAP) && !push ? cnt - 1 : cnt; // don't change the address when pushing!
     AsyncRAM#(N, M) ar(bot, out, mem_raddr, mem_waddr, wr && en, clk);
 
     always_ff @(posedge clk or negedge nrst) begin
@@ -58,12 +57,13 @@ module RPNCalculator#(parameter N = 16, M = 10)(
             else unique case (op)
                 ADD: cnt <= cnt - 1;
                 MUL: cnt <= cnt - 1;
-                POPA: cnt <= cnt - 1;
-                POPB: cnt <= cnt - 1;
+                POP: cnt <= cnt - 1;
+                JUMP: cnt <= cnt - 1;
             endcase
         end
     end
   
+  	// needs to be signed for the comparison
   	logic signed [N-1:0] signed_zero = {N{1'b0}};
 
     always_ff @(posedge clk or negedge nrst) begin
@@ -71,14 +71,14 @@ module RPNCalculator#(parameter N = 16, M = 10)(
         else if (en) begin
             if (push) out <= d;
             else unique case (op)
-              	GREATER: out <= (out > signed_zero);
+              	GREATER: out <= {{(N-1){0}}, (out > signed_zero)}; // warning ignored -- the size of zero-extension is right
                 NEG:  out <= -out;
                 ADD:  if (cnt >= 2) out <= out + bot;
                 MUL:  if (cnt >= 2) out <= out * bot;
                 SWAP: if (cnt >= 2) out <= bot;
                 LOAD: out <= bot;
-                POPA: out <= bot;
-                POPB: out <= bot;
+                POP:  out <= bot;
+                JUMP: out <= bot;
             endcase
         end
     end
@@ -99,9 +99,9 @@ module SteeringModule#(parameter N = 16, M = 10)(
     const logic READY = 1, BUSY = 0;
 
     logic pc_inc, pc_overwrite, finish;
-  	assign finish = insn[N-1] && insn[N-2];
-  	assign pc_overwrite = insn[N-1] && !insn[N-2] && &insn[2:0];
-  	assign pc_inc = !finish && !pc_overwrite;
+  	assign finish = insn[N-1] && insn[N-2]; // should we go from BUSY to READY?
+  	assign pc_overwrite = insn[N-1] && !insn[N-2] && &insn[2:0]; // pc <- out
+  	assign pc_inc = !finish && !pc_overwrite; // pc <- pc + 1
 
     always_ff @ (posedge clk or negedge nrst) begin
         if (!nrst) st <= READY;
@@ -123,7 +123,7 @@ module SteeringModule#(parameter N = 16, M = 10)(
     logic en = !ready && !finish;
     logic push = !ready && !insn[N-1];
 
-    // TODO: actually implement en
+    // cnt is ignored
     RPNCalculator#(N, M) calc(out, , en, nrst, clk, push, insn[2:0], insn);
     assign ready = (st == READY);
 
